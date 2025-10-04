@@ -2,7 +2,7 @@ from flask import Flask,request,jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required,get_jwt, get_jwt_identity
 from werkzeug.security import generate_password_hash, check_password_hash
-import os
+
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///mydb.db'
@@ -137,6 +137,37 @@ def product_create():
 
 
     return jsonify({"message": "product created successfully"}), 201
+
+
+@app.route("/getproducts", methods =["GET"])
+@jwt_required()
+def get_products():
+    claims= get_jwt()
+    current_user_id = get_jwt_identity()
+    role = claims.get("role")
+
+    if role == "user":
+        products = Product.query.filter_by(user_id= current_user_id).all()
+
+    else:
+        products = Product.query.all()
+
+
+
+    item = []
+
+    for p in products:
+        item.append({
+            "id": p.id,
+            "name":p.name,
+            "description":p.description,
+            "price":p.price,
+            "owner": p.owner.username
+        })
+    if not item:
+        return jsonify({"msg": "there are no products here yet"})
+    return jsonify({"products":item})   
+
 
 
 if __name__ == "__main__":
