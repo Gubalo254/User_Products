@@ -170,6 +170,66 @@ def get_products():
 
 
 
+@app.route("/product/<int:product_id>", methods =["DELETE"])
+@jwt_required()
+def delete_product(product_id):
+    current_user = get_jwt_identity()
+    claims = get_jwt()
+    role = claims.get('role')
+    product = Product.query.filter_by(id = product_id).first()
+
+    if not product:
+        return jsonify({"error": "product not found"}), 404
+   
+    if role == "user" and product.user_id != int(current_user):
+        return jsonify({"error": "you are not allowed to delete this product"}), 403
+    db.session.delete(product)
+    db.session.commit()
+    return jsonify({"msg":f"product {product.name} deleted succesfully"}), 200
+
+
+@app.route("/update/product/<int:product_id>", methods = ["PATCH" ])
+@jwt_required()
+def update_product(product_id):
+    claims = get_jwt()
+    current_user = get_jwt_identity()
+    role = claims["role"]
+
+    product = Product.query.filter_by(id = product_id).first()
+    
+    if not product:
+        return jsonify({"error": "product not found"}), 404
+    if role == "user" and product.user_id != int(current_user):
+        return jsonify({"error": "you are not allowed to make an update of this product"}), 403
+    data = request.get_json()
+
+    if "name" in data:
+        product.name = data["name"]
+    if "description" in data:
+        product.description = data["description"]
+    if "price" in data:
+       price = data["price"]
+       if price is not None:
+            try:
+                product.price = float(price)
+            except ValueError:
+                return jsonify({"error": "price must be a number"}), 400
+    
+
+    db.session.commit()
+
+    return jsonify({
+        "msg": f"Product {product.name} updated successfully",
+        "product": {
+            "id": product.id,
+            "name": product.name,
+            "description": product.description,
+            "price": product.price,
+            "owner": product.owner.username
+        }
+    }), 200
+
+
 if __name__ == "__main__":
     with app.app_context():
         db.create_all()
