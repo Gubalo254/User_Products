@@ -2,14 +2,19 @@ from flask import Flask
 from flask_jwt_extended import JWTManager
 from models import db
 from routes import routes
+import os
+from dotenv import load_dotenv
+
+
+load_dotenv()
 
 
 
 def create_app():
     app = Flask(__name__)
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///mydb.db'
+    app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv("DATABASE_URI")
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-    app.config['JWT_SECRET_KEY'] = '7f8d2a9b4c6e1f3d8a2b5c7e9d1f4a6b8c3e2d5f7a9b1c4e6d8f2a3b5c7e9d1'
+    app.config['JWT_SECRET_KEY'] = os.getenv("JWT_SECRET_KEY")
     
     db.init_app(app)
     JWTManager(app)
