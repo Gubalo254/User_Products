@@ -19,7 +19,7 @@ class User(db.Model):
     email = db.Column(db.String(120), unique=True, nullable=False) 
     password_hash = db.Column(db.String(128), nullable=False)
     role = db.Column(db.String(20), default="user") 
-    products = db.relationship("Product", backref="owner", lazy=True) 
+    products = db.relationship("Product", backref="owner", lazy=True, cascade = "all, delete-orphan") 
 
 
 
@@ -87,27 +87,6 @@ def login_user():
 
 
 
-@app.route("/users")
-@jwt_required()
-def users_registered():
-    claims= get_jwt()
-
-    if claims["role"] != "admin":
-        return jsonify({"error": "Admins only!"}), 403
-    
-
-    users = User.query.all()
-    results = []
-    for user in users:
-        results.append({
-            "id":user.id,
-            "username":user.username,
-            "email": user.email
-                            })
-    return jsonify({"users": results})
-
-
-
 
 @app.route("/products", methods=["POST"])
 @jwt_required()
@@ -137,6 +116,29 @@ def product_create():
 
 
     return jsonify({"message": "product created successfully"}), 201
+
+
+
+@app.route("/users")
+@jwt_required()
+def users_registered():
+    claims= get_jwt()
+
+    if claims["role"] != "admin":
+        return jsonify({"error": "Admins only!"}), 403
+    
+
+    users = User.query.all()
+    results = []
+    for user in users:
+        results.append({
+            "id":user.id,
+            "username":user.username,
+            "email": user.email
+                            })
+    return jsonify({"users": results})
+
+
 
 
 @app.route("/getproducts", methods =["GET"])
@@ -201,7 +203,7 @@ def update_product(product_id):
         return jsonify({"error": "product not found"}), 404
     if role == "user" and product.user_id != int(current_user):
         return jsonify({"error": "you are not allowed to make an update of this product"}), 403
-    data = request.get_json()
+    data = request.get_json() or {}
 
     if "name" in data:
         product.name = data["name"]
@@ -227,6 +229,72 @@ def update_product(product_id):
             "price": product.price,
             "owner": product.owner.username
         }
+    }), 200
+
+@app.route("/remove/users/<int:user_id>", methods =["DELETE"])
+@jwt_required()
+def remove_user(user_id):
+    claims = get_jwt()
+    role = claims["role"]
+    user = User.query.filter_by(id = user_id).first()
+    products = Product.query.filter_by(user_id= user_id).all()
+    
+
+    if not user:
+        return jsonify({"error": "user not found"})
+    
+    if role == "user":
+       return jsonify({"error": "Access denied!"})
+    
+    items = []
+
+    for p in products:
+        items.append({
+            "id": p.id,
+            "name":p.name,
+            "description":p.description,
+            "price":p.price,
+            "owner": p.owner.username
+        })
+   
+    user_data = {"id": user.id, "name": user.username, "email": user.email}
+
+    db.session.delete(user)
+    db.session.commit()
+
+
+    return jsonify({"msg":"you removed a user","user":{"id":user_data["id"], "username":user_data["name"], "email":user_data["email"]}, "mssg": f"{user_data['name']}'s products cleared from the db as well", "products": items })
+    
+
+@app.route("/update/user/<int:user_id>", methods =["PATCH"])
+@jwt_required()
+def update_user(user_id):
+    current_user = get_jwt_identity()
+    current_user_id = int(current_user)
+    user = User.query.filter_by(id=user_id).first()
+
+    if not user:
+        return jsonify({"error": "no such user"})
+    
+    if current_user_id != user.id:
+        return jsonify({"error": "you are not allowed to update this users details"})
+    
+    
+    user_data = request.get_json()
+    if "username" in user_data:
+            user.username = user_data["username"]
+    if "email" in user_data:
+            user.email = user_data["email"]
+    if "password" in user_data:
+            password = user_data["password"]
+            password_hashed = generate_password_hash(password)
+            user.hash_password = password_hashed
+
+    db.session.commit()
+    return jsonify({"msg": "user's details updated successfully","user": {
+            "id": user.id,
+            "name": user.username,
+            "email": user.email}
     }), 200
 
 
