@@ -1,7 +1,7 @@
 from flask import request, jsonify,Blueprint
 from werkzeug.security import generate_password_hash, check_password_hash
-from models import db, User, Product
-from flask_jwt_extended import jwt_required, get_jwt, get_jwt_identity, create_access_token
+from models import db, User, Product,BLOCKLIST
+from flask_jwt_extended import jwt_required, get_jwt, get_jwt_identity, create_access_token, create_refresh_token
 
 routes = Blueprint("routes", __name__)
 
@@ -48,11 +48,9 @@ def login_user():
         return jsonify({"error": "invalid email or password"})
     
 
-    access_token = create_access_token(
-    identity=str(user.id), 
-    additional_claims={"role": user.role}
-)
-    return jsonify(access_token=access_token), 200
+    access_token = create_access_token(identity=str(user.id),  additional_claims={"role": user.role}) 
+    refresh_token = create_refresh_token(identity=str(user.id))
+    return jsonify(access_token=access_token, refresh_token=refresh_token), 200
 
 
 
@@ -266,3 +264,19 @@ def update_user(user_id):
             "email": user.email}
     }), 200
 
+@routes.route("/logout", methods = ["POST"])
+@jwt_required()
+def logout_user():
+    jti = get_jwt().get("jti")
+    BLOCKLIST.add(jti)
+    return jsonify({"msg": "Successfully logged out"}), 200
+
+
+
+@routes.route("/refresh/token", methods = ["POST"])
+@jwt_required(refresh=True)
+def refresh_token():
+    current_user_id = get_jwt_identity()
+    new_access_token = create_access_token(identity=current_user_id)
+    
+    return jsonify({"access_token": new_access_token})
